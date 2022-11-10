@@ -85,7 +85,7 @@ const filter = (
 const randomInt3 = random(0, 100);
 console.log([
   ...take(
-    filter(randomInt, (el) => el > 70),
+    filter(randomInt3, (el) => el > 70),
     3
   ),
 ]);
@@ -215,7 +215,6 @@ const mapSeq = <T>(
   mappers: ((value: T) => T)[]
 ): IterableIterator<T> => {
   const collectionIterator = iterable[Symbol.iterator]();
-  console.log(collectionIterator);
   return {
     [Symbol.iterator]() {
       return this;
@@ -227,6 +226,8 @@ const mapSeq = <T>(
       let mappersIteratorResult = mappersIterator.next();
       let result: T = value;
       while (!mappersIteratorResult.done) {
+        console.log(mappersIteratorResult.value(result));
+
         result = mappersIteratorResult.value(result);
         mappersIteratorResult = mappersIterator.next();
       }
