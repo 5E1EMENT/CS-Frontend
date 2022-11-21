@@ -83,6 +83,8 @@ const filter = (
 };
 
 const randomInt3 = random(0, 100);
+console.log(randomInt3);
+console.log(filter(randomInt3, (el) => el > 70));
 console.log([
   ...take(
     filter(randomInt3, (el) => el > 70),
