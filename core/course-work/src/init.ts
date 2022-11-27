@@ -4,21 +4,39 @@ import { Dictionary, UserInterface } from './types';
 export default class AbstractReq<T> {
   private static reqOptions: Dictionary<string | string[]> = {};
 
-  and(option: string): IterableIterator<T | T[]> {
-    let iteratorData: Iterator<any>;
+  static find(findData: string[], option: string): IterableIterator<boolean> {
+    const findDataIterator: Iterator<string> = findData[Symbol.iterator]();
 
     return {
       [Symbol.iterator]() {
         return this;
       },
+      next: (): IteratorResult<boolean> => {
+        const { done, value } = findDataIterator.next();
+
+        if (!done) {
+          return { done: false, value: value === option };
+        }
+
+        return { done: true, value: undefined };
+      },
+    };
+  }
+
+  and(option: string): IterableIterator<T | T[]> {
+    let iteratorData: Iterator<any>;
+    return {
+      [Symbol.iterator]() {
+        return this;
+      },
       // @ts-ignore
-      next: (data: IterableIterator<T>): IteratorResult<T | T[] | undefined> => {
+      next: (data: IterableIterator<T>): IteratorResult<T | T[]> => {
         if (!iteratorData) {
           iteratorData = data[Symbol.iterator]();
         }
         const { value, done } = iteratorData.next();
         const selectData = AbstractReq.reqOptions.select as unknown as string[];
-        const findSetting = selectData.find((item) => item === option);
+        const [findSetting] = [...AbstractReq.filterResult(AbstractReq.find(selectData, option))];
         console.log(findSetting);
         return { value, done };
       },
@@ -130,7 +148,7 @@ export default class AbstractReq<T> {
     };
   }
 
-  pipe(x0: T[], ...fns: IterableIterator<T | T[]>[]) {
+  query(x0: T[], ...fns: IterableIterator<T | T[]>[]) {
     const reduceData = fns.reduce(
       (acc, iterator) => ({
         // @ts-ignore
@@ -148,13 +166,13 @@ export default class AbstractReq<T> {
       }),
       x0,
     );
-    const filterResult = this.filterResult(reduceData);
+    const filterResult = AbstractReq.filterResult(reduceData);
     return filterResult;
   }
 
-  private filterResult(pipeResult: IterableIterator<T | T[]>): IterableIterator<T | T[]> {
-    const values: IterableIterator<T[]>[] = [];
-    let valuesIterator: IterableIterator<IterableIterator<T[]>>;
+  private static filterResult(pipeResult: IterableIterator<any>): IterableIterator<any> {
+    const values: IterableIterator<any>[] = [];
+    let valuesIterator: IterableIterator<IterableIterator<any>>;
     return {
       [Symbol.iterator]() {
         return this;
@@ -164,7 +182,7 @@ export default class AbstractReq<T> {
         let iter = pipeResult.next();
         while (!iter.done) {
           if (iter.value) {
-            values.push(iter.value as unknown as IterableIterator<T[]>);
+            values.push(iter.value as unknown as IterableIterator<any>);
           }
           iter = pipeResult.next();
         }
@@ -216,5 +234,7 @@ const data: UserInterface[] = [
 ];
 
 const userSearch = new AbstractReq();
-const { includes, where, select } = userSearch;
-console.info([...userSearch.pipe(data, select(['user', 'skills']), where('skills'), includes('alchemy'))]);
+const { includes, where, select, and } = userSearch;
+console.info([
+  ...userSearch.query(data, select(['user', 'skills']), where('skills'), includes('alchemy'), and('skills')),
+]);
