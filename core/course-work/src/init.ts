@@ -2,51 +2,82 @@
 import { Dictionary, UserInterface } from './types';
 
 export default class AbstractReq<T> {
-  data: T[];
+  private static reqOptions: Dictionary<string | string[]> = {};
 
-  reqOptions: Dictionary<string | string[]> = {};
+  and(option: string): IterableIterator<T | T[]> {
+    let iteratorData: Iterator<any>;
 
-  iteratorData: IterableIterator<T>;
-
-  constructor(data: T[]) {
-    this.data = data;
-    this.iteratorData = this.data[Symbol.iterator]();
-  }
-
-  includes(settings: string | string[]): IterableIterator<T | T[]> {
-    this.reqOptions.includes = settings;
-    const resultObj = Object.create(this);
-    const iterator: IterableIterator<T | T[]> = {
+    return {
       [Symbol.iterator]() {
         return this;
       },
-      next: (): IteratorResult<T | T[]> => {
-        const { value, done } = this.iteratorData.next();
-        // console.log(value);
+      // @ts-ignore
+      next: (data: IterableIterator<T>): IteratorResult<T | T[] | undefined> => {
+        if (!iteratorData) {
+          iteratorData = data[Symbol.iterator]();
+        }
+        const { value, done } = iteratorData.next();
+        const selectData = AbstractReq.reqOptions.select as unknown as string[];
+        const findSetting = selectData.find((item) => item === option);
+        console.log(findSetting);
+        return { value, done };
+      },
+    };
+  }
+
+  includes(settings: string): IterableIterator<T | T[]> {
+    let iteratorSettings = AbstractReq.getIteratorSettings(settings);
+    let iteratorData: Iterator<any>;
+    let resultObj = {} as any;
+    AbstractReq.reqOptions.includes = settings;
+    return {
+      [Symbol.iterator]() {
+        return this;
+      },
+      // @ts-ignore
+      next: (data: IterableIterator<T>): IteratorResult<T | T[] | undefined> => {
+        if (!iteratorData) {
+          iteratorData = data[Symbol.iterator]();
+        }
+        const { value, done } = iteratorData.next();
+        const settingsIter = iteratorSettings.next();
+        if (!done) {
+          const includes = value.where.indexOf(settingsIter.value) !== -1;
+          if (includes) {
+            resultObj = { ...value };
+            delete resultObj.where;
+            iteratorSettings = AbstractReq.getIteratorSettings(settings);
+            return { value: resultObj, done: false };
+          }
+          iteratorSettings = AbstractReq.getIteratorSettings(settings);
+        }
         return {
           done,
-          value,
+          value: undefined,
         };
       },
     };
-    return Object.assign(resultObj, iterator);
   }
 
   where(key: string): IterableIterator<T | T[]> {
-    const resultObj = Object.create(this);
-    this.reqOptions.where = key;
-    const iterator: IterableIterator<T | T[]> = {
+    let iteratorData: Iterator<T>;
+    AbstractReq.reqOptions.where = key;
+    return {
       [Symbol.iterator]() {
         return this;
       },
-      next: (): IteratorResult<T | T[]> => {
-        const { value, done } = this.iteratorData.next();
-        console.log(value);
+      // @ts-ignore
+      next: (data: IterableIterator<T>): IteratorResult<Record<string, string>> => {
+        if (!iteratorData) {
+          iteratorData = data[Symbol.iterator]();
+        }
+        const { value, done } = iteratorData.next();
         if (value) {
           if (value[key]) {
+            const objData = { ...value, where: value[key] } as Record<string, string>;
             return {
               done,
-              value: value[key],
+              value: objData,
             };
           }
           return {
@@ -60,21 +91,24 @@ export default class AbstractReq<T> {
         };
       },
     };
-    return Object.assign(resultObj, iterator);
   }
 
   select(settings: string | string[]): IterableIterator<T | T[]> {
-    let iteratorSettings = this.getIteratorSettings(settings);
-    const resultObj = Object.create(this);
-
-    this.reqOptions.select = settings;
-    this.data = [];
-    const iterator: IterableIterator<T | T[]> = {
+    let iteratorSettings = AbstractReq.getIteratorSettings(settings);
+    const resultObj = {} as T;
+    let iteratorData: Iterator<T>;
+    AbstractReq.reqOptions.select = settings;
+    return {
       [Symbol.iterator]() {
         return this;
       },
-      next: (): IteratorResult<T | T[]> => {
-        const { value, done } = this.iteratorData.next();
+      // @ts-ignore
+      next: (data: IterableIterator<T>): IteratorResult<T | T[]> => {
+        if (!iteratorData) {
+          iteratorData = data[Symbol.iterator]();
+        }
+
+        const { value, done } = iteratorData.next();
         if (!done) {
           let iter = iteratorSettings.next();
           while (!iter.done) {
@@ -82,43 +116,80 @@ export default class AbstractReq<T> {
             iter = iteratorSettings.next();
           }
 
-          iteratorSettings = this.getIteratorSettings(settings);
-          this.data.push({ ...resultObj });
+          iteratorSettings = AbstractReq.getIteratorSettings(settings);
           return {
             done: false,
             value: { ...resultObj },
           };
         }
-        this.iteratorData = this.data[Symbol.iterator]();
         return {
           done: true,
           value: this,
         };
       },
     };
-    const t = Object.assign(resultObj, iterator);
-    return t;
   }
 
-  find(query: IterableIterator<T | T[]>): IterableIterator<T | T[]> {
+  pipe(x0: T[], ...fns: IterableIterator<T | T[]>[]) {
+    const reduceData = fns.reduce(
+      (acc, iterator) => ({
+        // @ts-ignore
+        [Symbol.iterator]() {
+          return this;
+        },
+        next: (): IteratorResult<T | T[]> => {
+          // @ts-ignore
+          const { done, value } = iterator.next(acc);
+          return {
+            done,
+            value,
+          };
+        },
+      }),
+      x0,
+    );
+    const filterResult = this.filterResult(reduceData);
+    return filterResult;
+  }
+
+  private filterResult(pipeResult: IterableIterator<T | T[]>): IterableIterator<T | T[]> {
+    const values: IterableIterator<T[]>[] = [];
+    let valuesIterator: IterableIterator<IterableIterator<T[]>>;
     return {
       [Symbol.iterator]() {
         return this;
       },
-      next(): IteratorResult<T | T[]> {
-        const iterator = query.next();
-        if (iterator.done) {
-          return { done: true, value: undefined };
+      // @ts-ignore
+      next() {
+        let iter = pipeResult.next();
+        while (!iter.done) {
+          if (iter.value) {
+            values.push(iter.value as unknown as IterableIterator<T[]>);
+          }
+          iter = pipeResult.next();
+        }
+
+        if (!valuesIterator) {
+          valuesIterator = values[Symbol.iterator]();
+        }
+
+        const { done, value } = valuesIterator.next();
+
+        if (!done) {
+          return {
+            done,
+            value,
+          };
         }
         return {
-          done: false,
-          value: iterator.value,
+          done: true,
+          value: undefined,
         };
       },
     };
   }
 
-  private getIteratorSettings(settings: string | string[]): IterableIterator<string> {
+  static getIteratorSettings(settings: string | string[]): IterableIterator<string> {
     if (typeof settings === 'string') {
       return [settings][Symbol.iterator]();
     }
@@ -144,79 +215,6 @@ const data: UserInterface[] = [
   },
 ];
 
-const userSearch = new AbstractReq(data);
-// @ts-ignore
-console.info([...userSearch.find(userSearch.select(['user', 'skills']).where('skills'))]);
-
-// // console.log([...new Calc([3, 4, 5]).add(2)]);
-// // 1. Необходимо написать итератор для генерации случайных чисел по заданным параметрам
-// const random = (from: number, to: number): IterableIterator<number> => ({
-//   [Symbol.iterator]() {
-//     return this;
-//   },
-//   next(): IteratorResult<number> {
-//     console.log('random');
-//     return {
-//       done: false,
-//       value: Math.floor(Math.random() * (to - from + 1) + from),
-//     };
-//   },
-// });
-
-// // 2. Необходимо написать функцию take, которая принимает любой Iterable объект
-// // и возвращает итератор по заданному количеству его элементов
-
-// const take = (iterable: IterableIterator<number | number[]>, count: number): IterableIterator<number | number[]> => {
-//   let current = 0;
-//   return {
-//     [Symbol.iterator]() {
-//       return this;
-//     },
-//     next(): IteratorResult<number | number[]> {
-//       current++;
-//       console.log('take');
-//       if (current <= count) {
-//         return {
-//           done: false,
-//           value: iterable.next().value,
-//         };
-//       }
-//       return {
-//         done: true,
-//         value: undefined,
-//       };
-//     },
-//   };
-// };
-
-// // 3. Необходимо написать функцию filter, которая принимает любой Iterable объект
-// // и функцию-предикат и возвращает итератор по элементам которые удовлетворяют предикату
-
-// const filter = (iter: IterableIterator<number>, fn: (el: number) => boolean): IterableIterator<number> => ({
-//   [Symbol.iterator]() {
-//     return this;
-//   },
-//   next(): IteratorResult<number> {
-//     const iterator = iter.next();
-//     const iterValue = iterator.value;
-//     console.log('filter');
-//     if (iterator.done) {
-//       return {
-//         done: true,
-//         value: undefined,
-//       };
-//     }
-//     return {
-//       done: false,
-//       value: fn(iterValue) ? iterValue : this.next().value,
-//     };
-//   },
-// });
-
-// const randomInt3 = random(0, 100);
-// console.log([
-//   ...take(
-//     filter(randomInt3, (el) => el > 70),
-//     3,
-//   ),
-// ]);
+const userSearch = new AbstractReq();
+const { includes, where, select } = userSearch;
+console.info([...userSearch.pipe(data, select(['user', 'skills']), where('skills'), includes('alchemy'))]);
