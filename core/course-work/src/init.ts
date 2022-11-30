@@ -4,35 +4,6 @@ import { Dictionary, UserInterface } from './types';
 export default class AbstractReq<T> {
   private static reqOptions: Dictionary<string | string[]> = {};
 
-  static find(findData: string[], option: string): IterableIterator<boolean> {
-    const findDataIterator: Iterator<string> = findData[Symbol.iterator]();
-    const findResults: boolean[] = [];
-    let valuesIterator: IterableIterator<boolean>;
-    return {
-      [Symbol.iterator]() {
-        return this;
-      },
-      next: (): IteratorResult<boolean> => {
-        let iter = findDataIterator.next();
-        while (!iter.done) {
-          if (iter.value !== undefined) {
-            findResults.push(iter.value === option);
-          }
-          iter = findDataIterator.next();
-        }
-
-        if (!valuesIterator) {
-          valuesIterator = findResults[Symbol.iterator]();
-        }
-
-        const filterResult = AbstractReq.filterResult(valuesIterator, { filterBy: 'boolean' });
-        const filterResultIterator = filterResult[Symbol.iterator]();
-        const { done, value } = filterResultIterator.next();
-        return { done, value };
-      },
-    };
-  }
-
   and(option: string): IterableIterator<T | T[]> {
     let iteratorData: Iterator<any>;
     return {
@@ -45,11 +16,34 @@ export default class AbstractReq<T> {
           iteratorData = data[Symbol.iterator]();
         }
         const { value, done } = iteratorData.next();
-        const selectData = AbstractReq.reqOptions.select as unknown as string[];
-        const [findSetting] = [...AbstractReq.find(selectData, option)];
+        if (value) {
+          if (option in value) {
+            return { value: value[option], done };
+          }
+        }
 
-        if (!findSetting) return { value, done };
+        return { value: undefined, done: true };
+      },
+    };
+  }
 
+  startsWith(option: string): IterableIterator<T | T[]> {
+    let iteratorData: Iterator<any>;
+    const regExpStartsWith = new RegExp(`^${option}`, 'i');
+    return {
+      [Symbol.iterator]() {
+        return this;
+      },
+      // @ts-ignore
+      next: (data: IterableIterator<T>): IteratorResult<T | T[]> => {
+        if (!iteratorData) {
+          iteratorData = data[Symbol.iterator]();
+        }
+        const { value, done } = iteratorData.next();
+        if (value) {
+          const result = regExpStartsWith.test(value);
+          return { value: result ? value : undefined, done };
+        }
         return { value, done };
       },
     };
@@ -182,10 +176,7 @@ export default class AbstractReq<T> {
     return filterResult;
   }
 
-  private static filterResult(
-    pipeResult: IterableIterator<any>,
-    options: Record<string, string> = { filterBy: 'all' },
-  ): IterableIterator<any> {
+  private static filterResult(pipeResult: IterableIterator<any>): IterableIterator<any> {
     const values: IterableIterator<any>[] = [];
     let valuesIterator: IterableIterator<IterableIterator<any>>;
     return {
@@ -196,14 +187,8 @@ export default class AbstractReq<T> {
       next() {
         let iter = pipeResult.next();
         while (!iter.done) {
-          if (options.filterBy === 'all') {
-            if (iter.value !== undefined) {
-              values.push(iter.value as unknown as IterableIterator<any>);
-            }
-          } else if (options.filterBy === 'boolean') {
-            if (iter.value) {
-              values.push(iter.value as unknown as IterableIterator<any>);
-            }
+          if (iter.value !== undefined) {
+            values.push(iter.value as unknown as IterableIterator<any>);
           }
 
           iter = pipeResult.next();
@@ -256,7 +241,14 @@ const data: UserInterface[] = [
 ];
 
 const userSearch = new AbstractReq();
-const { includes, where, select, and } = userSearch;
+const { includes, where, select, and, startsWith } = userSearch;
 console.info([
-  ...userSearch.query(data, select(['user', 'skills']), where('skills'), includes('alchemy'), and('skillss')),
+  ...userSearch.query(
+    data,
+    select(['user', 'skills']),
+    where('skills'),
+    includes('alchemy'),
+    and('user'),
+    startsWith('Ger'),
+  ),
 ]);
