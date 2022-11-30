@@ -6,19 +6,29 @@ export default class AbstractReq<T> {
 
   static find(findData: string[], option: string): IterableIterator<boolean> {
     const findDataIterator: Iterator<string> = findData[Symbol.iterator]();
-
+    const findResults: boolean[] = [];
+    let valuesIterator: IterableIterator<boolean>;
     return {
       [Symbol.iterator]() {
         return this;
       },
       next: (): IteratorResult<boolean> => {
-        const { done, value } = findDataIterator.next();
-
-        if (!done) {
-          return { done: false, value: value === option };
+        let iter = findDataIterator.next();
+        while (!iter.done) {
+          if (iter.value !== undefined) {
+            findResults.push(iter.value === option);
+          }
+          iter = findDataIterator.next();
         }
 
-        return { done: true, value: undefined };
+        if (!valuesIterator) {
+          valuesIterator = findResults[Symbol.iterator]();
+        }
+
+        const filterResult = AbstractReq.filterResult(valuesIterator, { filterBy: 'boolean' });
+        const filterResultIterator = filterResult[Symbol.iterator]();
+        const { done, value } = filterResultIterator.next();
+        return { done, value };
       },
     };
   }
@@ -36,8 +46,10 @@ export default class AbstractReq<T> {
         }
         const { value, done } = iteratorData.next();
         const selectData = AbstractReq.reqOptions.select as unknown as string[];
-        const [findSetting] = [...AbstractReq.filterResult(AbstractReq.find(selectData, option))];
-        console.log(findSetting);
+        const [findSetting] = [...AbstractReq.find(selectData, option)];
+
+        if (!findSetting) return { value, done };
+
         return { value, done };
       },
     };
@@ -148,7 +160,7 @@ export default class AbstractReq<T> {
     };
   }
 
-  query(x0: T[], ...fns: IterableIterator<T | T[]>[]) {
+  query(data: T[], ...fns: IterableIterator<T | T[]>[]) {
     const reduceData = fns.reduce(
       (acc, iterator) => ({
         // @ts-ignore
@@ -164,13 +176,16 @@ export default class AbstractReq<T> {
           };
         },
       }),
-      x0,
+      data,
     );
     const filterResult = AbstractReq.filterResult(reduceData);
     return filterResult;
   }
 
-  private static filterResult(pipeResult: IterableIterator<any>): IterableIterator<any> {
+  private static filterResult(
+    pipeResult: IterableIterator<any>,
+    options: Record<string, string> = { filterBy: 'all' },
+  ): IterableIterator<any> {
     const values: IterableIterator<any>[] = [];
     let valuesIterator: IterableIterator<IterableIterator<any>>;
     return {
@@ -181,9 +196,16 @@ export default class AbstractReq<T> {
       next() {
         let iter = pipeResult.next();
         while (!iter.done) {
-          if (iter.value) {
-            values.push(iter.value as unknown as IterableIterator<any>);
+          if (options.filterBy === 'all') {
+            if (iter.value !== undefined) {
+              values.push(iter.value as unknown as IterableIterator<any>);
+            }
+          } else if (options.filterBy === 'boolean') {
+            if (iter.value) {
+              values.push(iter.value as unknown as IterableIterator<any>);
+            }
           }
+
           iter = pipeResult.next();
         }
 
@@ -207,7 +229,7 @@ export default class AbstractReq<T> {
     };
   }
 
-  static getIteratorSettings(settings: string | string[]): IterableIterator<string> {
+  private static getIteratorSettings(settings: string | string[]): IterableIterator<string> {
     if (typeof settings === 'string') {
       return [settings][Symbol.iterator]();
     }
@@ -236,5 +258,5 @@ const data: UserInterface[] = [
 const userSearch = new AbstractReq();
 const { includes, where, select, and } = userSearch;
 console.info([
-  ...userSearch.query(data, select(['user', 'skills']), where('skills'), includes('alchemy'), and('skills')),
+  ...userSearch.query(data, select(['user', 'skills']), where('skills'), includes('alchemy'), and('skillss')),
 ]);
